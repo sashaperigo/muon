@@ -44,8 +44,8 @@
 #include "chrome/common/pref_names.h"
 #include "components/history/core/browser/history_service.h"
 #include "components/prefs/pref_service.h"
-#include "content/common/devtools/devtools_network_conditions.h"
-#include "content/common/devtools/devtools_network_controller.h"
+#include "content/network/throttling/network_conditions.h"
+#include "content/network/throttling/throttling_controller.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/storage_partition.h"
 #include "extensions/features/features.h"
@@ -69,9 +69,9 @@
 #endif
 
 using content::BrowserThread;
-using content::DevToolsNetworkConditions;
-using content::DevToolsNetworkController;
+using content::NetworkConditions;
 using content::StoragePartition;
+using content::ThrottlingController;
 
 namespace {
 
@@ -467,24 +467,21 @@ void Session::SetDownloadPath(const base::FilePath& path) {
 }
 
 void Session::EnableNetworkEmulation(const mate::Dictionary& options) {
-  std::unique_ptr<DevToolsNetworkConditions> conditions;
+  std::unique_ptr<NetworkConditions> conditions;
   bool offline = false;
   double latency = 0.0, download_throughput = 0.0, upload_throughput = 0.0;
   if (options.Get("offline", &offline) && offline) {
-    conditions.reset(new DevToolsNetworkConditions(offline));
+    conditions.reset(new NetworkConditions(offline));
   } else {
     options.Get("latency", &latency);
     options.Get("downloadThroughput", &download_throughput);
     options.Get("uploadThroughput", &upload_throughput);
-    conditions.reset(
-        new DevToolsNetworkConditions(false,
-                                                 latency,
-                                                 download_throughput,
-                                                 upload_throughput));
+    conditions.reset(new NetworkConditions(false, latency, download_throughput,
+                                           upload_throughput));
   }
 
   BrowserThread::PostTask(BrowserThread::IO, FROM_HERE,
-      base::BindOnce(&DevToolsNetworkController::SetNetworkState,
+      base::BindOnce(&ThrottlingController::SetConditions,
                      devtools_network_emulation_client_id_,
                      std::move(conditions)));
   profile_->network_delegate()->SetDevToolsNetworkEmulationClientId(
@@ -492,9 +489,9 @@ void Session::EnableNetworkEmulation(const mate::Dictionary& options) {
 }
 
 void Session::DisableNetworkEmulation() {
-  std::unique_ptr<DevToolsNetworkConditions> conditions;
+  std::unique_ptr<NetworkConditions> conditions;
   BrowserThread::PostTask(BrowserThread::IO, FROM_HERE,
-      base::BindOnce(&DevToolsNetworkController::SetNetworkState,
+      base::BindOnce(&ThrottlingController::SetConditions,
                      devtools_network_emulation_client_id_,
                      std::move(conditions)));
   profile_->network_delegate()->SetDevToolsNetworkEmulationClientId(
